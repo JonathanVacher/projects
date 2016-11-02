@@ -72,9 +72,9 @@ class motionCloud:
         self.sv=1/(self.rho*self.LifeTime)
         if self.show:
             if self.sv >(-2*np.sqrt(2)+4)/(self.N*self.dt):
-                print('LifeTime=%f must be greater than %f \n' %(self.LifeTime,((self.N*self.dt)/((-2*np.sqrt(2)+4)*self.rho))) )
+                print('LifeTime={0:f} must be greater than {1:f} \n'.format(self.LifeTime, ((self.N*self.dt)/((-2*np.sqrt(2)+4)*self.rho))) )
             else:
-                print('Correct parameters LifeTime = %f > %f \n' % (self.LifeTime,((self.N*self.dt)/((-2*np.sqrt(2)+4)*self.rho))) )
+                print('Correct parameters LifeTime = {0:f} > {1:f} \n'.format(self.LifeTime, ((self.N*self.dt)/((-2*np.sqrt(2)+4)*self.rho))) )
 
         Lx=np.concatenate((np.linspace(0,self.N/2-1,self.N/2),np.linspace(-self.N/2,-1,self.N/2)))
         x,y=np.meshgrid(Lx,Lx)
