@@ -225,34 +225,34 @@ class motionCloud(dynTex):
         dev = api.cl.get_platforms()[0].get_devices()[0]
         #print dev
         if self.chooseDev == 1:
-            thr = api.Thread.create(api)
+            self.thr = api.Thread.create(api)
         else:
-            thr = api.Thread(dev).create()
+            self.thr = api.Thread(dev).create()
                        
         # Compile functions on gpu
-        self.fftc = fft.compile(thr)
+        self.fftc = fft.compile(self.thr)
 
         counters = rng.create_counters()
-        self.counters_dev = thr.to_device(counters)
-        self.rngc = rng.compile(thr)
+        self.counters_dev = self.thr.to_device(counters)
+        self.rngc = rng.compile(self.thr)
 
-        self.recurc = recur.compile(thr)
-        self.copyc = copy.compile(thr)               
+        self.recurc = recur.compile(self.thr)
+        self.copyc = copy.compile(self.thr)               
                        
         # initialize value on device
         Z = np.zeros((self.N,self.N), dtype=np.complex64)
         self.spatialKernel=self.spatialKernel.astype(np.complex64)
 
-        self.TX = thr.to_device(Z)
-        self.ITX = thr.to_device(Z)
-        self.w_dev = thr.to_device(Z)
+        self.TX = self.thr.to_device(Z)
+        self.ITX = self.thr.to_device(Z)
+        self.w_dev = self.thr.to_device(Z)
 
-        self.A = thr.to_device(self.al)
-        self.B = thr.to_device(self.be)
-        self.C = thr.to_device(self.spatialKernel)
+        self.A = self.thr.to_device(self.al)
+        self.B = self.thr.to_device(self.be)
+        self.C = self.thr.to_device(self.spatialKernel)
 
-        self.F1 = thr.to_device(Z)
-        self.F2 = thr.to_device(Z)
+        self.F1 = self.thr.to_device(Z)
+        self.F2 = self.thr.to_device(Z)
         
         for i in range(200):
             self.getFrame()
