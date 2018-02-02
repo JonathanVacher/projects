@@ -7,3 +7,6 @@ The files BSfit0*****.py is the parametric bootstrapping used to compute error b
 Aconst indicate that the model assumes a constant log-prior slope.
 Alin indicate that the model assumes an affine log-prior slope.
 No indication means no assumption.
+
+
+The file tuningCurve-psychometricFunc.ipynb makes possible connections between tuning curves of neurons and the psychometric function. 

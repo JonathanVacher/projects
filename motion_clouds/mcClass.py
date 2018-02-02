@@ -16,6 +16,8 @@ from reikna.core import Type, Annotation, Parameter
 from reikna.algorithms import PureParallel
 from reikna.fft import FFT
 
+os.environ['PYOPENCL_COMPILER_OUTPUT'] = '0'
+
 # define cuda/opencl kernel for the recursion
 def mul_array(carr_t1):
     return PureParallel(
@@ -58,6 +60,7 @@ class dynTex:
         
     def colorPCA(self,n):
         X = np.matrix(np.reshape(self.mov[:,:,:,n], (self.Ny*self.Nx,3)))
+        print(X.shape)
         Xm = X.mean(axis=0)
         X = X - Xm
         C = X.T*X/(X.shape[0]-1)
@@ -221,13 +224,13 @@ class motionCloud(dynTex):
         recur = mul_array(rng.parameter.randoms)
         copy = copy_array(rng.parameter.randoms)
         
-        api = ocl_api()
-        dev = api.cl.get_platforms()[0].get_devices()[0]
-        #print dev
+        self.api = ocl_api()
+        #print(self.api)
+        self.dev = self.api.cl.get_platforms()[0].get_devices()[0]
         if self.chooseDev == 1:
-            self.thr = api.Thread.create(api)
+            self.thr = self.api.Thread.create(self.api)
         else:
-            self.thr = api.Thread(dev).create()
+            self.thr = self.api.Thread(self.dev).create()
                        
         # Compile functions on gpu
         self.fftc = fft.compile(self.thr)
@@ -259,22 +262,23 @@ class motionCloud(dynTex):
                        
         
     def getFrame(self):
-        # Noise 
-        self.rngc(self.counters_dev, self.w_dev)
-        # AR(2) recursion
-        self.recurc(self.ITX, self.A, self.F1, self.B, self.F2, self.C, self.w_dev)
-        # update values
-        self.copyc(self.F2, self.F1)
-        self.copyc(self.F1, self.ITX)
-        # ifft
-        self.fftc(self.TX,self.ITX,0) 
-        # get frame from gpu
-        TT = np.real(self.TX.get()) 
+        for i in range(overSamp):
+            # Noise 
+            self.rngc(self.counters_dev, self.w_dev)
+            # AR(2) recursion
+            self.recurc(self.ITX, self.A, self.F1, self.B, self.F2, self.C, self.w_dev)
+            # update values
+            self.copyc(self.F2, self.F1)
+            self.copyc(self.F1, self.ITX)
+            # ifft
+            self.fftc(self.TX,self.ITX,0) 
+            # get frame from gpu
         
+        TT = np.real(self.TX.get()) 
         return TT
     
     def synTex(self, Nf):
-        self.movSyn = np.empty((self.N,self.N,3,Nf))
+        self.movSyn = np.zeros((self.N,self.N,3,Nf))
         for i in range(Nf):
             frame = self.getFrame()
             self.movSyn[:,:,0,i]= frame #255.0*(frame-frame.min())/(frame.max()-frame.min())-127.5
