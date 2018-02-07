@@ -93,6 +93,58 @@ class dynTex:
                 self.movPer[:,:,k,i] = periodicComp(self.mov[:,:,k,i])
 
 
+class driftingGrating(dynTex):
+    def __init__(self, directory=None, fileName=None, N = 512, framePerSecond=60,chooseDev=0):
+        dynTex.__init__(self, directory, fileName)
+        self.N = N
+        self.framePerSecond = framePerSecond
+        self.dt = 1.0/(self.framePerSecond)
+        self.chooseDev=chooseDev
+
+    def dgParam(self, const, fM, th, v, it):
+        self.const = self.thr.to_device(np.array(const, dtype=np.float32))
+        self.fM = self.thr.to_device(np.array(self.N/ppcm*fM, dtype=np.float32))
+        self.th = self.thr.to_device(np.array(th, dtype=np.float32))
+        self.v = self.thr.to_device(np.array(ppcm*v/(self.N*self.framePerSecond), dtype=np.float32))
+        self.it = np.array(it, dtype=np.float32)
+
+    def initGPU(self):
+        self.api = ocl_api()
+        #dev = api.cl.get_platforms()[1].get_devices()[0]
+        #print dev
+        if self.chooseDev == 1:
+            self.thr = self.api.Thread.create(self.api)
+#             self.thr = api.Thread.create(api)
+        else:
+            self.thr = api.Thread(dev).create()
+
+        self.dgc = self.thr.compile("""
+                __kernel void dg(
+                  __global const float *x, __global const float *y, __global float *im, __global const float *co,
+                  __global const float *a, __global const float *th, __global const float *v, __global float *t)
+                 {
+                  int gid0 = get_global_id(0);
+                  im[gid0] = co[0]*sin((cos(M_PI/180.0*th[0])*x[gid0]+sin(M_PI/180.0*th[0])*y[gid0])*2.0*M_PI*a[0]
+                  +2.0*M_PI*a[0]*v[0]*t[0]) ;
+                  } """).dg
+
+        Lx=np.linspace(-0.5,0.5,self.N)
+        X,Y=np.meshgrid(Lx,Lx)
+        X = X.astype(np.float32)
+        Y = Y.astype(np.float32)
+        Z = np.zeros((self.N,self.N), dtype=np.float32)
+
+        self.x = self.thr.to_device(X)
+        self.y = self.thr.to_device(Y)
+        self.res = self.thr.to_device(Z)
+
+    def getFrame(self):
+        self.dgc(self.x, self.y, self.res, self.const, self.fM, \
+            self.th, self.v, self.thr.to_device(self.it), \
+            global_size=self.N*self.N)
+        self.it += 1.0
+        return  self.res.get()
+
 
 class motionCloud(dynTex):
     
@@ -259,10 +311,16 @@ class motionCloud(dynTex):
         
         for i in range(200):
             self.getFrame()
-                       
+          
+    def updateGPU(self):
+        self.spatialKernel=self.spatialKernel.astype(np.complex64)
+        self.A = self.thr.to_device(self.al)
+        self.B = self.thr.to_device(self.be)
+        self.C = self.thr.to_device(self.spatialKernel)
+
         
     def getFrame(self):
-        for i in range(overSamp):
+        for i in range(self.overSamp):
             # Noise 
             self.rngc(self.counters_dev, self.w_dev)
             # AR(2) recursion
