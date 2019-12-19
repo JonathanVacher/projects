@@ -161,17 +161,17 @@ class motionCloud(dynTex):
         self.show=show
     def mcKernel(self, fM, fS, th, thS, fT, v, octa):
         # cycle per image (cpi), NxN px, 65 px/cm, ex: 256x256 px  256/65 = 3.94 cm 
-        #   pxnumber / (ppcm * fMode (en c/°) ) = cpi ('freq en px') 
+        # pxnumber / (ppcm * fMode (en c/°) ) = cpi ('freq en px') 
         self.theta = th*np.pi/180
         self.thetaSpread= thS*np.pi/180
-        self.fMode = self.N/ppcm*fM 
+        self.fMode = 1/ppcm*fM  # self.N
         self.LifeTime= 1.0/fT
         self.octave = octa
         if self.octave == 1:
             self.fSpread = fS 
             u = np.sqrt(np.exp((self.fSpread/np.sqrt(8)*np.sqrt(np.log(2)))**2)-1)
         elif self.octave == 0:
-            self.fSpread = self.N/ppcm*fS #/self.N 
+            self.fSpread = 1/ppcm*fS #/self.N 
             u=np.roots([1,0,3,0, 3,0,1,0,-self.fSpread**2/self.fMode**2]) # 
             u=u[np.where(np.isreal(u))]
             u=np.real(u[np.where(u>0)])
@@ -181,13 +181,14 @@ class motionCloud(dynTex):
         self.srho= u 
         self.sv=1/(self.rho*self.LifeTime)
         if self.show:
-            if self.sv >(-2*np.sqrt(2)+4)/(self.N*self.dt):
-                print('LifeTime=%f must be greater than %f \n' %(self.LifeTime,((self.N*self.dt)/((-2*np.sqrt(2)+4)*self.rho))) )
+            if self.sv >(-2*np.sqrt(2)+4)/(1*self.dt):
+                print('fT=%f must be lower than %f \n' %(1/self.LifeTime,(((-2*np.sqrt(2)+4)*self.rho)/(1*self.dt))) )
             else:
-                print('Correct parameters LifeTime = %f > %f \n' % (self.LifeTime,((self.N*self.dt)/((-2*np.sqrt(2)+4)*self.rho))) )
+                print('Correct parameters fT = %f < %f \n' % (1/self.LifeTime,(((-2*np.sqrt(2)+4)*self.rho)/(1*self.dt))) )
 
         Lx=np.concatenate((np.linspace(0,self.N/2-1,self.N/2),np.linspace(-self.N/2,-1,self.N/2)))
         x,y=np.meshgrid(Lx,Lx)
+        x,y= x/self.N, y/self.N
         R=np.sqrt(x**2+y**2)
         R[0,0]=10**(-6)
         Theta=np.arctan2(y,x)
@@ -198,8 +199,8 @@ class motionCloud(dynTex):
         b=oneovertau**2
 
         # AR coefficients
-        self.al=np.complex64((2-self.dt*a-self.dt**2*b)*np.exp(2*np.pi*1j*(v[0]*x/self.N+v[1]*y/self.N)))
-        self.be=np.complex64((-1+self.dt*a)*np.exp(2*np.pi*1j*2*(v[0]*x/self.N+v[1]*y/self.N)))
+        self.al=np.complex64((2-self.dt*a-self.dt**2*b)*np.exp(2*np.pi*1j*(v[0]*x+v[1]*y))) # /self.N
+        self.be=np.complex64((-1+self.dt*a)*np.exp(2*np.pi*1j*2*(v[0]*x+v[1]*y))) # /self.N
         
         # Spacial kernel
         angular=np.exp(np.cos(2*(Theta-self.theta))/(4*self.thetaSpread**2))
@@ -210,6 +211,38 @@ class motionCloud(dynTex):
         C = 1.0/np.sum(self.spatialKernel/(4*(oneovertau*self.dt)**3)) 
         self.spatialKernel= self.stdConst*np.sqrt(C*self.spatialKernel)
         
+    def natKernel(self, v, sv):
+        self.sv = sv
+        
+        if self.show:
+            if self.sv >(-2*np.sqrt(2)+4)/(self.dt):
+                print('sv=%f must be lower than %f \n' %(self.sv,(-2*np.sqrt(2)+4)/(self.dt) ))
+            else:
+                print('Correct parameters sv = %f < %f \n' % (self.sv,(-2*np.sqrt(2)+4)/(self.dt) ))
+
+        Lx=np.concatenate((np.linspace(0,self.N/2-1,self.N/2),np.linspace(-self.N/2,-1,self.N/2)))
+        x,y=np.meshgrid(Lx,Lx)
+        x,y= x/self.N, y/self.N
+        R=np.sqrt(x**2+y**2)
+        R[0,0]=10**(-6)
+        Theta=np.arctan2(y,x)
+
+        # CAR coefficients
+        oneovertau=self.sv*R
+        a=2*oneovertau
+        b=oneovertau**2
+
+        # AR coefficients
+        self.al=np.complex64((2-self.dt*a-self.dt**2*b)*np.exp(2*np.pi*1j*(v[0]*x+v[1]*y)))
+        self.be=np.complex64((-1+self.dt*a)*np.exp(2*np.pi*1j*2*(v[0]*x+v[1]*y)))
+        
+        # Spatial kernel
+        radial = (R<0.25)#/(np.pi*0.25)
+        self.spatialKernel= radial*(1.0/R)**2*4*(oneovertau*self.dt)**3 # 
+        
+        # Compute normalization constant
+        C = 1.0/np.sum(self.spatialKernel/(4*(oneovertau*self.dt)**3)) 
+        self.spatialKernel= self.stdConst*1.1e6/(2*np.pi)*np.sqrt(C*self.spatialKernel)/self.N
         
     def learnKernel(self, Fmov, dt):
         
@@ -309,7 +342,7 @@ class motionCloud(dynTex):
         self.F1 = self.thr.to_device(Z)
         self.F2 = self.thr.to_device(Z)
         
-        for i in range(200):
+        for i in range(np.int32(self.timeOffset*self.framePerSecond*self.overSamp)):
             self.getFrame()
           
     def updateGPU(self):
