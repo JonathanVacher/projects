@@ -1,5 +1,5 @@
 # coding: utf-8
-# Jonathan Vacher, November 2016
+# Jonathan Vacher, November 2020
 
 import numpy as np
 import scipy.io
@@ -113,8 +113,8 @@ class driftingGrating(dynTex):
         #dev = api.cl.get_platforms()[1].get_devices()[0]
         #print dev
         if self.chooseDev == 1:
-            #self.thr = self.api.Thread.create(self.api)
-            self.thr = api.Thread.create(api)
+            self.thr = self.api.Thread.create(self.api)
+#             self.thr = api.Thread.create(api)
         else:
             self.thr = api.Thread(dev).create()
 
